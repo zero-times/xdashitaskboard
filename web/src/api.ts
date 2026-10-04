@@ -1,4 +1,5 @@
 import type {
+  CloudDevice,
   ActorIdentity,
   AiChatCatalog,
   AiChatAttachmentInput,
@@ -805,4 +806,20 @@ export function resolvePersistedAttachmentUrl(value: string): string {
     return value;
   }
   return value;
+}
+
+export async function listCloudDevices(signal?: AbortSignal): Promise<CloudDevice[]> {
+  const data = await request<{ devices: CloudDevice[] }>("/api/devices", { signal });
+  return data.devices;
+}
+
+export async function listCloudDeviceWorkspaces(deviceId: string, signal?: AbortSignal): Promise<Record<string, string>> {
+  const data = await request<{ workspaces: Record<string, string> }>(`/api/devices/${encodeURIComponent(deviceId)}/projects`, { signal });
+  return data.workspaces;
+}
+
+export async function mapCloudDeviceProject(deviceId: string, projectId: string, workspacePath: string): Promise<void> {
+  await request(`/api/devices/${encodeURIComponent(deviceId)}/projects/${encodeURIComponent(projectId)}`, {
+    method: "PUT", body: JSON.stringify({ workspacePath }),
+  });
 }

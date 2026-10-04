@@ -37,7 +37,16 @@ export interface DevelopmentScan {
   contexts: DevelopmentContext[];
 }
 
+export interface CloudDevice {
+  id: string;
+  name: string;
+  platform: string;
+  taskctlPath: string;
+  skillPath: string;
+}
+
 export interface TaskboardMetadata {
+  cloudDevices?: boolean;
   manageTaskboardSkillPath?: string;
   capabilities?: TaskboardCapabilities;
   mode?: "local" | "cloud";

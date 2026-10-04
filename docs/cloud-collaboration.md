@@ -20,13 +20,13 @@ The production resource names are:
 
 This is intentionally a shared-password trust model. The Basic username is only the actor name displayed in task and comment attribution, not a verified identity. Anyone who knows the shared password has full read and write access and can choose any actor name. Use it only with the other trusted collaborator.
 
-## What stays local
+## Cloud data and device execution
 
-The cloud stores project, issue, comment, relation, and attachment data. It does not store a device's absolute project or worktree paths.
+The cloud stores projects, issues, comments, relations, attachments, registered devices, and each device's project-directory mappings. Device-specific paths are visible to trusted authenticated board collaborators; they are not stored as the shared project's single workspace path.
 
-Each collaborator runs the **local companion**: a **device-local loopback service** (not a chat persona) for Codex, Git/worktree scanning, installed Skill/MCP discovery, and project path mapping. The companion keeps the cloud URL, actor name, shared password, and device-specific project mappings in `.data/cloud-companion.json` with mode `0600`. Ordinary Taskboard HTTP routes (tasks, comments, attachments) are the shared API; they are not a separate “companion API”.
+Each computer authenticates directly through `taskctl`, registers a device record, and saves its own project directories under that device in D1. Credentials stay in its private ignored `.data/cloud-device.json`. The native Codex app executes code locally without a second Taskboard panel.
 
-When cloud mode is active, the cloud is the only business-data source. A failed cloud request fails visibly. The companion does not fall back to the local SQLite database and does not write to both databases. `taskctl cloud logout` returns that device to its separate local mode; it does not merge local and cloud data.
+Cloud business data has one authoritative source. Failed cloud requests are reported rather than falling back to local SQLite. Logging out clears this CLI's cloud session; it does not merge local and cloud data.
 
 ## Owner: validate locally
 
@@ -92,62 +92,40 @@ Current Cloudflare references:
 - [Create an R2 bucket](https://developers.cloudflare.com/r2/buckets/create-buckets/)
 - [Workers secrets](https://developers.cloudflare.com/workers/configuration/secrets/)
 
-## Friend: connect an existing GitHub installation
+## Device: connect directly to the cloud board
 
-The owner follows this device setup too, using the owner's own actor name and checkout path. The friend does not need your local database or your filesystem paths. They update their existing clone and build the current UI:
-
-```bash
-git pull --ff-only
-npm ci
-npm run build:web
-```
-
-Start the local companion:
-
-```bash
-CODEX_TASKBOARD_HOST=127.0.0.1 npm start
-```
-
-In a second terminal, configure cloud mode. Use the deployed HTTPS Worker origin, choose the actor name that should appear on their actions, and enter the shared password only at the private `Shared key:` prompt:
+Use the deployed Worker as the only panel. Install the `manage-taskboard` skill on the computer that will execute work. Each computer logs into the same board and registers its own device:
 
 ```bash
 npm run taskctl -- cloud login \
   --url https://YOUR-WORKER-ORIGIN \
-  --actor-name "FRIEND-DISPLAY-NAME"
-
+  --actor-name "YOUR-DISPLAY-NAME" \
+  --device-name "MY-COMPUTER"
 npm run taskctl -- cloud status
+npm run taskctl -- device current
 npm run taskctl -- project list
 ```
 
-The shared password is not part of the command and is not echoed by the prompt.
+Enter the board password only at the private `Shared key:` prompt. No local server or local panel needs to be started. The CLI stores the credentials in its ignored `.data/cloud-device.json` with mode `0600` and sends the existing password only in the HTTPS Basic Authorization header. Login returns a cloud `boardUrl` that selects the registered device.
 
-For every cloud project used with Codex, map its project ID to that friend's own absolute checkout path:
+When cloning or choosing a project on this device, register its real checkout:
 
 ```bash
 npm run taskctl -- project map PROJECT_ID \
-  --workspace-path /absolute/path/on/their/device
+  --workspace-path /absolute/path/on/this/device
 ```
 
-The owner runs the same mapping command with the owner's own path. Mappings are intentionally different on each device and are never synchronized to D1.
+Device records and project paths are stored in D1. Paths are scoped by device ID and can differ between computers. They are visible to trusted authenticated board collaborators; a device record is not a separate authentication boundary.
 
-Launch the injected Codex window:
+In the cloud panel, open the project menu and choose **当前设备与项目目录 / This device and project folders**. Select the computer currently in use, choose a project, and view or edit its full checkout path. The selected device is remembered in this browser.
 
-```bash
-CODEX_TASKBOARD_HOST=127.0.0.1 npm run codex
-```
+Open a task and click **在新对话打开 / Open in new conversation**. The cloud panel opens the native Codex app with that device's project directory, task identifier, and exact CLI path. Send the prepared message to start execution. The skill claims the task and writes comments and status directly to the cloud; user acceptance controls completion.
 
-`npm run codex` reuses or starts the loopback companion. Keep it running while using the embedded board. The companion supplies local Codex/Git/Skill/MCP capabilities and sends the shared password to the Worker only in the HTTPS Basic `Authorization` header. It does not write that password to D1 or R2, return it to the browser UI, or print it in logs. Device paths also stay off Cloudflare.
+The browser uses a page login form with the same actor display name and board password. Successful login creates the existing signed HttpOnly Secure session cookie; it does not trigger a native browser password dialog. The CLI and browser each keep their own credential session; both authenticate to the same cloud service. The cloud cannot read files or execute code on the computer: execution remains in its native Codex app. This path does not provide browser-side Git scans or local AI chat.
 
-Do not point `CODEX_TASKBOARD_URL` directly at the cloud origin for this workflow. `taskctl` talks to the loopback companion, which applies Basic Authentication and the device's local project mapping. If the companion uses a non-default loopback port, set `CODEX_TASKBOARD_COMPANION_URL` to that loopback origin.
+## Local mode
 
-## Browser-only access
-
-Either collaborator can open the deployed HTTPS Worker URL directly. The browser's native Basic Authentication prompt asks for:
-
-- username: the actor display name for that browser;
-- password: the shared password.
-
-The browser view supports the shared board and attachments. Device-only Codex, Git/worktree, Skill, and MCP capabilities still require the local companion.
+The existing local panel and companion remain available for local-only installations and explicitly selected launcher runtimes. They are not a prerequisite for the cloud workflow above.
 
 ## Rotate or revoke the shared password
 
@@ -157,7 +135,7 @@ The owner rotates the Worker secret using Wrangler's interactive prompt:
 npx wrangler secret put TASKBOARD_SHARED_SECRET
 ```
 
-After rotation, both devices rerun `taskctl cloud login` and enter the new password. Browser-only users must authenticate again; closing the authenticated browser session or clearing site authentication may be necessary because browsers cache Basic credentials.
+After rotation, registered devices rerun `taskctl cloud login` and enter the new password. Browser-only users must authenticate again; closing the authenticated browser session or clearing site authentication may be necessary because browsers cache Basic credentials.
 
 Because both collaborators share one password, rotation affects both at once. There is no individual-user revocation in this two-person trust model.
 

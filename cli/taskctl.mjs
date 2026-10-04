@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+import { hostname, homedir } from "node:os";
+import { randomUUID } from "node:crypto";
+import { readCloudSession, writeCloudSession, clearCloudSession, cloudTarget } from "./cloud-session.mjs";
 import { execFile, spawn } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
@@ -35,7 +38,9 @@ const COMMAND_OPTIONS = new Map([
   ["project create", new Set(["id", "name", "workspace-path", "json"])],
   ["project map", new Set(["workspace-path", "json"])],
   ["project readme", new Set(["content", "file", "if-version", "json"])],
-  ["cloud login", new Set(["url", "actor-name", "json"])],
+  ["cloud login", new Set(["url", "actor-name", "device-name", "json"])],
+  ["device list", new Set(["json"])],
+  ["device current", new Set(["json"])],
   ["cloud status", new Set(["json"])],
   ["cloud logout", new Set(["json"])],
   ["issue list", new Set(["project", "status", "archived", "json"])],
@@ -130,7 +135,8 @@ Commands:
   project map PROJECT_ID --workspace-path PATH
   project readme get [PROJECT_ID]
   project readme set [PROJECT_ID] (--content TEXT | --file FILE) [--if-version N]
-  cloud login --url URL --actor-name NAME
+  cloud login --url URL --actor-name NAME [--device-name NAME]
+  device list|current
   cloud status|logout
   issue list|get|create|update|move|archive|restore|tree|relation
   comment list ISSUE_ID [--after CURSOR]
@@ -340,7 +346,7 @@ async function execute(parsed, overrides) {
   const allowedOptions = COMMAND_OPTIONS.get(command);
   if (!allowedOptions) {
     throw usageError(
-      "Expected one of: project list/create/map/readme, cloud login/status/logout, issue list/get/create/update/move/archive/restore/tree/relation, comment list/add/update/delete, attachment list/download/upload, context current",
+      "Expected one of: project list/create/map/readme, cloud login/status/logout, device list/current, issue list/get/create/update/move/archive/restore/tree/relation, comment list/add/update/delete, attachment list/download/upload, context current",
     );
   }
   validateOptions(parsed.options, allowedOptions);
@@ -349,27 +355,74 @@ async function execute(parsed, overrides) {
   const env = parsed.options["runtime-file"] === undefined
     ? processEnv
     : { ...processEnv, CODEX_TASKBOARD_RUNTIME_FILE: parsed.options["runtime-file"] };
+  const explicitLocal = env.CODEX_TASKBOARD_COMPANION_URL !== undefined || parsed.options["runtime-file"] !== undefined;
+  const session = explicitLocal ? null : await readCloudSession(env);
+  if (!explicitLocal && command === "cloud login") {
+    expectOperandCount(parsed, 0);
+    const remoteUrl = normalizeCloudUrl(requiredOption(parsed.options, "url"));
+    const actorName = requiredOption(parsed.options, "actor-name").trim();
+    if (!actorName || actorName.length > 120 || actorName.includes(":")) throw usageError("Invalid cloud actor name");
+    const sharedKey = overrides.readSecret ? await overrides.readSecret() : await readSecretFromInput(overrides.stdin ?? process.stdin, overrides.stderr ?? process.stderr);
+    if (!sharedKey || sharedKey.length > 4096) throw usageError("Cloud shared key cannot be empty or exceed 4096 characters");
+    const next = {
+      remoteUrl, actorName, sharedKey,
+      deviceId: session?.remoteUrl === remoteUrl ? session.deviceId : randomUUID(),
+    };
+    const cloudApi = createApiClient(overrides, cloudTarget(next));
+    const result = await cloudApi.request("POST", "/api/devices", {
+      id: next.deviceId,
+      name: parsed.options["device-name"] ?? hostname(), platform: process.platform,
+      taskctlPath: fileURLToPath(import.meta.url),
+      skillPath: path.join(env.CODEX_HOME ?? path.join(homedir(), ".codex"), "skills/manage-taskboard/SKILL.md"),
+    });
+    next.device = result.device;
+    await writeCloudSession(env, next);
+    return { mode: "cloud", remoteUrl, actorName, authenticated: true, device: next.device, boardUrl: `${remoteUrl}/?device=${next.deviceId}` };
+  }
+  if (!explicitLocal && command === "cloud status") {
+    expectOperandCount(parsed, 0);
+    return { mode: "cloud", authenticated: Boolean(session), remoteUrl: session?.remoteUrl ?? null, actorName: session?.actorName ?? null, device: session?.device ?? null };
+  }
+  if (!explicitLocal && command === "cloud logout") {
+    expectOperandCount(parsed, 0);
+    await clearCloudSession(env);
+    return { mode: "cloud", authenticated: false };
+  }
   const usesCompanionControl = command.startsWith("cloud ") || command === "project map";
-  const target = usesCompanionControl || env.CODEX_TASKBOARD_COMPANION_URL !== undefined
+  const target = session ? cloudTarget(session) : usesCompanionControl || env.CODEX_TASKBOARD_COMPANION_URL !== undefined
       ? await resolveCompanionUrl(env, overrides)
       : await resolveTaskboardBaseUrl(env, overrides);
   const api = createApiClient(overrides, target);
+  if (session) {
+    if (command === "device list") { expectOperandCount(parsed, 0); return api.request("GET", "/api/devices"); }
+    if (command === "device current") { expectOperandCount(parsed, 0); return { device: session.device, ...(await api.request("GET", `/api/devices/${session.deviceId}/projects`)) }; }
+    if (command === "project map") {
+      expectOperandCount(parsed, 1);
+      return api.request("PUT", `/api/devices/${session.deviceId}/projects/${encodeURIComponent(parsed.operands[0])}`, {
+        workspacePath: resolveInputPath(requiredOption(parsed.options, "workspace-path"), overrides),
+      });
+    }
+  }
+  if (command.startsWith("device ")) throw usageError("Run taskctl cloud login first");
   switch (command) {
     case "project list":
       expectOperandCount(parsed, 0);
-      return api.request("GET", "/api/projects");
-    case "project create":
+      return projectList(api, session);
+    case "project create": {
       expectOperandCount(parsed, 0);
-      return api.request("POST", "/api/projects", {
+      const workspacePath = parsed.options["workspace-path"] === undefined
+        ? undefined : resolveInputPath(parsed.options["workspace-path"], overrides);
+      const result = await api.request("POST", "/api/projects", {
         ...optionalField("id", parsed.options.id),
         name: requiredOption(parsed.options, "name"),
-        ...optionalField(
-          "workspacePath",
-          parsed.options["workspace-path"] === undefined
-            ? undefined
-            : resolveInputPath(parsed.options["workspace-path"], overrides),
-        ),
+        ...(!session ? optionalField("workspacePath", workspacePath) : {}),
       });
+      if (session && workspacePath) {
+        await api.request("PUT", `/api/devices/${session.deviceId}/projects/${encodeURIComponent(result.project.id)}`, { workspacePath });
+        result.project.workspacePath = workspacePath;
+      }
+      return result;
+    }
     case "project map":
       expectOperandCount(parsed, 1);
       return api.request(
@@ -500,7 +553,7 @@ async function execute(parsed, overrides) {
       return uploadAttachment(api, parsed.options, overrides);
     case "context current":
       expectOperandCount(parsed, 0);
-      return currentContext(api, parsed.options, overrides);
+      return currentContext(api, parsed.options, overrides, session);
     default:
       throw usageError(`Unsupported command: ${command}`);
   }
@@ -509,6 +562,7 @@ async function execute(parsed, overrides) {
 function createApiClient(overrides, {
   url: explicitBaseUrl,
   windowsTransport = false,
+  authorization,
 } = {}) {
   const fetchImplementation = overrides.fetch
     ?? (windowsTransport
@@ -533,6 +587,7 @@ function createApiClient(overrides, {
         headers: {
           accept: "application/json",
           "x-taskboard-client": "taskctl",
+          ...(authorization ? { authorization } : {}),
           ...init.headers,
         },
       });
@@ -1011,9 +1066,16 @@ async function mutateIssueRelation(api, action, taskId, options, overrides) {
   );
 }
 
-async function currentContext(api, options, overrides) {
-  const cwd = path.resolve(options.cwd ?? overrides.cwd ?? process.cwd());
+async function projectList(api, session) {
   const response = await api.request("GET", "/api/projects");
+  if (!session) return response;
+  const { workspaces } = await api.request("GET", `/api/devices/${session.deviceId}/projects`);
+  return { ...response, deviceId: session.deviceId, projects: response.projects.map(project => ({ ...project, workspacePath: workspaces[project.id] ?? null })) };
+}
+
+async function currentContext(api, options, overrides, session) {
+  const cwd = path.resolve(options.cwd ?? overrides.cwd ?? process.cwd());
+  const response = await projectList(api, session);
   const projects = Array.isArray(response.projects) ? response.projects : [];
   const matchingProjects = projects
     .filter((candidate) => workspaceContains(candidate?.workspacePath, cwd))

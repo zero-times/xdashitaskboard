@@ -1,3 +1,5 @@
+import { CloudDeviceDialog } from "./components/CloudDeviceDialog";
+import type { CloudDevice } from "./types";
 import { Toasts, showToast, dismissUndoToast } from "./components/Toasts";
 import { agentPlatformLabel, sessionResumeCommand } from "./agentSessions";
 import { resolveInlineAttachments } from "./inlineAttachments";
@@ -34,6 +36,8 @@ import {
   listArchivedTasks,
   listDevelopmentContexts,
   listDeviceWorkspaces,
+  listCloudDevices,
+  listCloudDeviceWorkspaces,
   listProjects,
   listTasks,
   moveTask as moveTaskRequest,
@@ -834,6 +838,9 @@ export function App() {
   const [projectContextMenu, setProjectContextMenu] = useState<ProjectContextMenuState | null>(null);
   const [projectCreateOpen, setProjectCreateOpen] = useState(false);
   const [projectName, setProjectName] = useState("");
+  const [cloudDeviceDialogOpen, setCloudDeviceDialogOpen] = useState(false);
+  const [cloudDevices, setCloudDevices] = useState<CloudDevice[]>([]);
+  const [cloudDeviceId, setCloudDeviceId] = useState(() => new URLSearchParams(window.location.search).get("device") ?? taskboardStorage.getItem("taskboard.cloud-device-id") ?? "");
   const [jiraDialogOpen, setJiraDialogOpen] = useState(false);
   const [jiraConnection, setJiraConnection] = useState<JiraConnection | null>(null);
   const [jiraSaving, setJiraSaving] = useState(false);
@@ -1922,12 +1929,24 @@ export function App() {
       current?.operation === "initial" ? { ...current, requestId } : current
     ));
     try {
-      const [nextProjects, metadata, workspaces] = await Promise.all([
+      const [nextProjects, metadata, localWorkspaces] = await Promise.all([
         listProjects(signal),
         getTaskboardMetadata(signal),
         listDeviceWorkspaces(signal),
       ]);
       if (requestId !== projectsRequestRef.current) return;
+      let workspaces = localWorkspaces;
+      if (metadata.cloudDevices) {
+        const devices = await listCloudDevices(signal);
+        const deviceId = new URLSearchParams(window.location.search).get("device") ?? taskboardStorage.getItem("taskboard.cloud-device-id") ?? "";
+        const device = devices.find(candidate => candidate.id === deviceId);
+        setCloudDevices(devices);
+        setCloudDeviceId(device?.id ?? "");
+        if (device) {
+          taskboardStorage.setItem("taskboard.cloud-device-id", device.id);
+          workspaces = await listCloudDeviceWorkspaces(device.id, signal);
+        } else workspaces = {};
+      }
       const [nextJiraConnection, nextTemporaryTasks] = await Promise.all([
         getJiraConnection(signal),
         listTasks(GLOBAL_PROJECT_ID, signal),
@@ -1935,6 +1954,7 @@ export function App() {
       if (requestId !== projectsRequestRef.current) return;
       setTaskboardMetadata((current) => (
         current
+        && current.cloudDevices === metadata.cloudDevices
         && current.mode === metadata.mode
         && JSON.stringify(current.realtime) === JSON.stringify(metadata.realtime)
         && current.manageTaskboardSkillPath === metadata.manageTaskboardSkillPath
@@ -1945,7 +1965,7 @@ export function App() {
       setManageTaskboardSkillPath(metadata.manageTaskboardSkillPath ?? "");
       setLocalAiChatAvailable(metadata.capabilities?.localAiChat === true);
       setDeviceWorkspacePaths((current) => {
-        const next = { ...current, ...workspaces };
+        const next = metadata.cloudDevices ? { ...workspaces } : { ...current, ...workspaces };
         delete next[GLOBAL_PROJECT_ID];
         if (JSON.stringify(next) === JSON.stringify(current)) return current;
         taskboardStorage.setItem(DEVICE_WORKSPACE_PATHS_KEY, JSON.stringify(next));
@@ -3038,6 +3058,20 @@ export function App() {
   }
 
   async function openTaskInThread(task: Task) {
+    if (taskboardMetadata?.cloudDevices) {
+      const device = cloudDevices.find(candidate => candidate.id === cloudDeviceId);
+      const workspacePath = deviceWorkspacePaths[task.projectId];
+      if (!device || (task.projectId !== GLOBAL_PROJECT_ID && !workspacePath)) {
+        setCloudDeviceDialogOpen(true);
+        setActionError(text("请先选择当前设备并设置该项目的本机目录。", "Choose this device and set the project folder first."));
+        return;
+      }
+      const deepLink = new URL("codex://threads/new");
+      if (workspacePath) deepLink.searchParams.set("path", workspacePath);
+      deepLink.searchParams.set("prompt", `[$manage-taskboard](${device.skillPath}) 议题 ID：${task.identifier}\n云端看板：${window.location.origin}\n当前设备：${device.id}\n使用这台设备的 taskctl：node "${device.taskctlPath}"。直接使用已登录的云端会话；发送后认领并执行任务，回写云端状态和结果。`);
+      window.location.assign(deepLink.toString());
+      return;
+    }
     const standalone = !embedded || window.parent === window;
     const projectless = task.projectId === GLOBAL_PROJECT_ID;
     const taskboardProject = projects.find((project) => project.id === task.projectId);
@@ -3506,6 +3540,10 @@ export function App() {
                       )}
                     </div>
                     <div className="project-menu-actions">
+                      {taskboardMetadata?.cloudDevices && <button type="button" role="menuitem" onClick={() => { setProjectMenuOpen(false); setCloudDeviceDialogOpen(true); }}>
+                        <TaskboardIcon className="project-avatar" name="projectFolder" />
+                        <span>{text("当前设备与项目目录", "This device and project folders")}</span>
+                      </button>}
                       <div className="project-menu-divider" role="separator" />
                       <button
                         type="button"
@@ -3985,6 +4023,24 @@ export function App() {
             <span className="context-menu-label">{text("删除项目", "Delete project")}</span>
           </button>
         </div>
+      )}
+
+      {cloudDeviceDialogOpen && (
+        <CloudDeviceDialog devices={cloudDevices} deviceId={cloudDeviceId}
+          projects={projects.filter(project => project.id !== GLOBAL_PROJECT_ID)}
+          projectId={projects.some(project => project.id === selectedProjectId && project.id !== GLOBAL_PROJECT_ID)
+            ? selectedProjectId : projects.find(project => project.id !== GLOBAL_PROJECT_ID)?.id ?? ""}
+          onClose={() => setCloudDeviceDialogOpen(false)}
+          onSelectDevice={(deviceId, workspaces) => {
+            taskboardStorage.setItem("taskboard.cloud-device-id", deviceId);
+            setCloudDeviceId(deviceId);
+            setDeviceWorkspacePaths(workspaces);
+            setActionError(null);
+            const url = new URL(window.location.href);
+            url.searchParams.set("device", deviceId);
+            window.history.replaceState(null, "", url);
+          }}
+        />
       )}
 
       {jiraDialogOpen && (

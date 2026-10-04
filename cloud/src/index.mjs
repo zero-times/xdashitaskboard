@@ -1,3 +1,5 @@
+import { loginPage, loginRequest } from "./login.mjs";
+import { routeDevices } from "./devices.mjs";
 import {
   parseMove, parseVersionMutation, parseRelationMutation,
   parseCommentCreate, parseCommentPatch, parseTaskCreate,
@@ -2462,12 +2464,15 @@ async function attachmentContent(env, id, request, download = false) {
 
 async function routeApi(request, env, actor, url) {
   const { pathname } = url;
+  const deviceResponse = await routeDevices(request, env, url, { json, readJson, methodNotAllowed, requireNoQuery });
+  if (deviceResponse) return deviceResponse;
 
   if (pathname === "/api/meta") {
     if (request.method !== "GET") methodNotAllowed(["GET"]);
     requireNoQuery(url, "GET /api/meta");
     return json(200, {
       mode: "cloud",
+      cloudDevices: true,
       manageTaskboardSkillPath: null,
       realtime: {
         transport: "websocket",
@@ -2868,8 +2873,16 @@ export default {
         return withSecurityHeaders(json(200, { status: "ok" }));
       }
 
+      if (url.pathname === "/api/session") {
+        return withSecurityHeaders(await loginRequest(request, env, authenticate));
+      }
       const authentication = await authenticate(request, env);
-      if (!authentication) return withSecurityHeaders(unauthorized());
+      if (!authentication) {
+        if (request.method === "GET" && !url.pathname.startsWith("/api/") && request.headers.get("accept")?.includes("text/html")) {
+          return withSecurityHeaders(loginPage(`${url.pathname}${url.search}`));
+        }
+        return withSecurityHeaders(unauthorized());
+      }
 
       let response = url.pathname.startsWith("/api/")
         ? await routeApi(request, env, authentication.actor, url)

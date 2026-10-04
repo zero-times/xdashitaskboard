@@ -9770,3 +9770,11 @@ kbd {
   .dashboard-metric { border-top: var(--border-hairline) solid var(--border); }
   .dashboard-metric:first-child { border-top: 0; }
 }
+
+.cloud-device-dialog { width: min(440px, 100%); }
+.cloud-device-dialog select {
+  width: 100%; height: 32px; padding: 0 9px;
+  border: var(--border-hairline) solid var(--border-strong); border-radius: 6px;
+  background: var(--surface); color: var(--text-primary); font: inherit;
+}
+.cloud-device-dialog > p { margin-top: 10px; line-height: 1.5; }

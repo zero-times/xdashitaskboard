@@ -40,17 +40,21 @@ Use `project readme get` and `project readme set` to read and update the project
 
 Set `CODEX_TASKBOARD_URL` to override the default local API origin, `http://127.0.0.1:47823`.
 
-For a shared cloud board, keep `taskctl` pointed at the **loopback companion** (local loopback service; see Terminology above) and configure the upstream HTTPS origin through it:
+For a shared cloud board, authenticate directly; no local service is needed:
 
 ```bash
-taskctl cloud login --url HTTPS_ORIGIN --actor-name NAME [--json]
-taskctl cloud status [--json]
-taskctl project list [--json]
-taskctl project map PROJECT_ID --workspace-path /absolute/local/path [--json]
-taskctl cloud logout [--json]
+taskctl cloud login --url HTTPS_ORIGIN --actor-name NAME [--device-name NAME] [--json]
+taskctl cloud status --json
+taskctl device current --json
+taskctl device list --json
+taskctl project list --json
+taskctl project map PROJECT_ID --workspace-path /absolute/local/path --json
+taskctl cloud logout --json
 ```
 
-`cloud login` reads the shared password from a private `Shared key:` prompt. The actor name is the display attribution sent through Basic Authentication. The local companion stores its configuration with mode `0600`; project mappings stay on the current device and can differ between collaborators. In cloud mode, failed upstream writes fail rather than falling back to or double-writing the local SQLite database.
+The private password prompt does not echo the password. Login registers this computer and returns a `boardUrl` selecting it. The CLI stores the session in `.data/cloud-device.json` next to its installation with mode `0600`; `CODEX_TASKBOARD_CLOUD_CONFIG` selects an explicit session file. Project mappings are stored in D1 under this device ID, so each computer can use a different checkout path. The cloud project's menu provides **当前设备与项目目录** to view and edit those mappings. Cloud requests use the existing board password in the HTTPS Basic Authorization header, never a URL or a request to a second local panel.
+
+An explicitly supplied `--runtime-file` or `CODEX_TASKBOARD_COMPANION_URL` still targets that named local runtime.
 
 Every issue or comment write requires conversation attribution. For Codex, `taskctl` reads `CODEX_THREAD_ID` or accepts explicit `--thread-id ID` (which takes precedence). For Claude Code, Pi, Google Antigravity CLI (AGY), and xAI Grok CLI, pass **both** `--agent-platform claude|pi|agy|grok` and `--session-id ID`. External attribution ignores `CODEX_THREAD_ID` and cannot be combined with `--thread-id`. No external session environment variables are inferred. Read commands do not require a conversation ID.
 
