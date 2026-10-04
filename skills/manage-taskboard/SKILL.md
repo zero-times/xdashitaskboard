@@ -17,7 +17,7 @@ Open only the relevant section of [references/cli.md](references/cli.md) when co
 
 For a cloud board, use one cloud UI and let `taskctl` authenticate directly with its HTTPS Worker. A local panel or companion is not needed for issue, comment, attachment, or project-directory operations.
 
-- Use the exact device `taskctl` path carried by the cloud board's conversation prompt. Otherwise use the explicitly supplied Taskboard installation; do not guess a CLI or endpoint.
+- When this skill includes `cli/taskctl.mjs`, use that bundled CLI with Node.js 20+; `board.json` next to this file records its installation board. Otherwise use the exact device `taskctl` path carried by the cloud board's conversation prompt or the explicitly supplied Taskboard installation; do not guess a CLI or endpoint.
 - Run `cloud status --json` before cloud work. If it is not authenticated, run `cloud login --url HTTPS_ORIGIN --actor-name NAME [--device-name NAME]`; enter the existing board password only through the private prompt. Do not put passwords in arguments, logs, tasks, or Git. Login registers this computer and stores its session in the CLI installation's private `.data/cloud-device.json`.
 - Login returns `boardUrl`; opening it selects this device in the cloud board. `device current --json` shows this device and its project directories. `device list --json` lists registered computers.
 - When the user selects or clones a cloud project on this computer, check `project list --json` and register its verified local checkout with `project map PROJECT_ID --workspace-path ABSOLUTE_PATH --json`. Mappings are saved to the cloud under the current device ID. Do not guess a path or overwrite another device's mapping.

@@ -1,3 +1,4 @@
+import { cloudSkillResponse } from "./skill.mjs";
 import { loginPage, loginRequest } from "./login.mjs";
 import { routeDevices } from "./devices.mjs";
 import {
@@ -2872,6 +2873,9 @@ export default {
         if (request.method !== "GET") methodNotAllowed(["GET"]);
         return withSecurityHeaders(json(200, { status: "ok" }));
       }
+
+      const skillResponse = await cloudSkillResponse(request, env);
+      if (skillResponse) return withSecurityHeaders(skillResponse);
 
       if (url.pathname === "/api/session") {
         return withSecurityHeaders(await loginRequest(request, env, authenticate));

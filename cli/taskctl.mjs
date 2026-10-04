@@ -4,7 +4,7 @@ import { hostname, homedir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { readCloudSession, writeCloudSession, clearCloudSession, cloudTarget } from "./cloud-session.mjs";
 import { execFile, spawn } from "node:child_process";
-import { realpathSync } from "node:fs";
+import { realpathSync, existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -373,7 +373,9 @@ async function execute(parsed, overrides) {
       id: next.deviceId,
       name: parsed.options["device-name"] ?? hostname(), platform: process.platform,
       taskctlPath: fileURLToPath(import.meta.url),
-      skillPath: path.join(env.CODEX_HOME ?? path.join(homedir(), ".codex"), "skills/manage-taskboard/SKILL.md"),
+      skillPath: existsSync(new URL("../SKILL.md", import.meta.url))
+        ? fileURLToPath(new URL("../SKILL.md", import.meta.url))
+        : path.join(env.CODEX_HOME ?? path.join(homedir(), ".codex"), "skills/manage-taskboard/SKILL.md"),
     });
     next.device = result.device;
     await writeCloudSession(env, next);

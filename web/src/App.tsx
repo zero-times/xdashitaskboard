@@ -1,3 +1,4 @@
+import { CloudConnectDialog } from "./components/CloudConnectDialog";
 import { CloudDeviceDialog } from "./components/CloudDeviceDialog";
 import type { CloudDevice } from "./types";
 import { Toasts, showToast, dismissUndoToast } from "./components/Toasts";
@@ -839,6 +840,7 @@ export function App() {
   const [projectCreateOpen, setProjectCreateOpen] = useState(false);
   const [projectName, setProjectName] = useState("");
   const [cloudDeviceDialogOpen, setCloudDeviceDialogOpen] = useState(false);
+  const [cloudConnectDialogOpen, setCloudConnectDialogOpen] = useState(false);
   const [cloudDevices, setCloudDevices] = useState<CloudDevice[]>([]);
   const [cloudDeviceId, setCloudDeviceId] = useState(() => new URLSearchParams(window.location.search).get("device") ?? taskboardStorage.getItem("taskboard.cloud-device-id") ?? "");
   const [jiraDialogOpen, setJiraDialogOpen] = useState(false);
@@ -3544,6 +3546,10 @@ export function App() {
                         <TaskboardIcon className="project-avatar" name="projectFolder" />
                         <span>{text("当前设备与项目目录", "This device and project folders")}</span>
                       </button>}
+                      {taskboardMetadata?.cloudDevices && <button type="button" role="menuitem" onClick={() => { setProjectMenuOpen(false); setCloudConnectDialogOpen(true); }}>
+                        <TaskboardIcon className="project-avatar" name="projectFolder" />
+                        <span>{text("连接其他电脑", "Connect another computer")}</span>
+                      </button>}
                       <div className="project-menu-divider" role="separator" />
                       <button
                         type="button"
@@ -4024,6 +4030,8 @@ export function App() {
           </button>
         </div>
       )}
+
+      {cloudConnectDialogOpen && <CloudConnectDialog onClose={() => setCloudConnectDialogOpen(false)} />}
 
       {cloudDeviceDialogOpen && (
         <CloudDeviceDialog devices={cloudDevices} deviceId={cloudDeviceId}

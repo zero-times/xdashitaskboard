@@ -92,6 +92,21 @@ Current Cloudflare references:
 - [Create an R2 bucket](https://developers.cloudflare.com/r2/buckets/create-buckets/)
 - [Workers secrets](https://developers.cloudflare.com/workers/configuration/secrets/)
 
+## Share the skill with another computer
+
+The deployed board publishes its skill at `https://YOUR-WORKER-ORIGIN/skill`. Its project menu has **连接其他电脑 / Connect another computer**, which copies an installation message for Codex on the other computer.
+
+The skill URL, `/skill/install.mjs`, and `/skill/package.json` are public, read-only installation resources. The package contains only eight explicitly listed skill/CLI source files. It includes no task data, device records, passwords, or Cloudflare credentials. Task APIs still require the board password.
+
+The installer requires Node.js 20+, downloads the bundled CLI and skill to the configured Codex skills directory, and prints the one-time `cloud login` command. No repository clone, dependencies, local panel, or companion are needed. Existing skill installations require explicit `--update`; private cloud sessions are retained. The installed skill records the installation board in `board.json`, and becomes available on the next Codex turn.
+
+```bash
+# Download /skill/install.mjs from your board and inspect it first.
+node install-taskboard.mjs https://YOUR-WORKER-ORIGIN
+```
+
+All installation links use the current board origin. After a custom domain is attached to this same Worker, its `/skill` URL supplies that domain automatically.
+
 ## Device: connect directly to the cloud board
 
 Use the deployed Worker as the only panel. Install the `manage-taskboard` skill on the computer that will execute work. Each computer logs into the same board and registers its own device:
