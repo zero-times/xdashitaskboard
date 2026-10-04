@@ -2860,7 +2860,7 @@ function withSecurityHeaders(response) {
   if (response.status === 101) return response;
   const secured = new Response(response.body, response);
   secured.headers.set("x-content-type-options", "nosniff");
-  secured.headers.set("referrer-policy", "no-referrer");
+  if (!secured.headers.has("referrer-policy")) secured.headers.set("referrer-policy", "no-referrer");
   return secured;
 }
 

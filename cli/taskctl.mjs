@@ -366,7 +366,7 @@ async function execute(parsed, overrides) {
     if (!sharedKey || sharedKey.length > 4096) throw usageError("Cloud shared key cannot be empty or exceed 4096 characters");
     const next = {
       remoteUrl, actorName, sharedKey,
-      deviceId: session?.remoteUrl === remoteUrl ? session.deviceId : randomUUID(),
+      deviceId: session?.deviceId ?? randomUUID(),
     };
     const cloudApi = createApiClient(overrides, cloudTarget(next));
     const result = await cloudApi.request("POST", "/api/devices", {

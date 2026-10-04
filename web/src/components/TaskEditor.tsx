@@ -148,7 +148,7 @@ function contextLabel(
   text: (chinese: string, english: string) => string,
 ): string {
   if (context.type === "branch") return context.branch;
-  const folder = context.path.split(/[\\/]/).filter(Boolean).at(-1) ?? context.path;
+  const folder = context.path?.split(/[\\/]/).filter(Boolean).at(-1) ?? text("工作树", "worktree");
   return `${context.branch ?? text("分离 HEAD", "detached")} · ${folder}`;
 }
 

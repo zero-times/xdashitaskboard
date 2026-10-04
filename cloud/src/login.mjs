@@ -29,6 +29,7 @@ ${error ? `<p class="error" role="alert">${escapeHtml(error)}</p>` : ""}
     status,
     headers: {
       "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
+      "referrer-policy": "same-origin",
       "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'",
     },
   });

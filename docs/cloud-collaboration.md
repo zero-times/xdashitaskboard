@@ -44,7 +44,7 @@ npm run cloud:migrate:local
 npm run dev:cloud
 ```
 
-Open the printed loopback URL. The browser shows its native Basic Authentication prompt. Enter any local actor name as the username and the value from `.dev.vars` as the password.
+Open the printed loopback URL. The browser shows the page login form. Enter any local actor name as the display name and the value from `.dev.vars` as the password.
 
 Local Wrangler state lives under `.wrangler/` and is not committed.
 
