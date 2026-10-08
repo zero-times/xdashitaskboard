@@ -1054,8 +1054,8 @@ async function deleteProject(env, id) {
   if (!project) {
     throw new ApiError(404, "PROJECT_NOT_FOUND", `Project '${id}' does not exist`);
   }
-  if (!id.startsWith("temp-")) {
-    throw new ApiError(403, "PROJECT_DELETE_FORBIDDEN", "Only manually created projects can be deleted");
+  if (id === "local") {
+    throw new ApiError(403, "PROJECT_DELETE_FORBIDDEN", "The global project cannot be deleted");
   }
   const result = await env.DB.prepare(`
     DELETE FROM projects
