@@ -155,6 +155,7 @@ function parseDevelopmentContext(value) {
   if (value.type === "worktree") {
     assertAllowedKeys(value, new Set(["type", "path", "branch"]));
     const worktreePath = stringField(value.path, "developmentContext.path", {
+      nullable: true,
       maxLength: 4096,
     });
     if (worktreePath?.includes("\0")) {
