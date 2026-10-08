@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent, type MouseEvent, type RefObject } from "react";
+import { useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type RefObject } from "react";
 import { assigneeTargetForActor } from "../actors";
 import { taskPriorityLabel, taskStatusLabel, useTaskboardI18n } from "../i18n";
 import { labelPresentation } from "../labels";
@@ -44,7 +44,40 @@ export function IssueListView({
 }: IssueListViewProps) {
   const { language, locale, text } = useTaskboardI18n();
   const [collapsed, setCollapsed] = useState(() => new Set(COLLAPSED_BY_DEFAULT));
+  const [expandedTaskIds, setExpandedTaskIds] = useState(() => new Set<string>());
   const [priorityMenuTaskId, setPriorityMenuTaskId] = useState<string | null>(null);
+
+  const taskIds = new Set(tasks.map((task) => task.id));
+  const childrenByParent = new Map<string, Task[]>();
+  const rootTasks: Task[] = [];
+  for (const task of tasks) {
+    const parentId = task.relations.parent?.id;
+    if (parentId && taskIds.has(parentId)) {
+      const children = childrenByParent.get(parentId) ?? [];
+      children.push(task);
+      childrenByParent.set(parentId, children);
+    } else {
+      rootTasks.push(task);
+    }
+  }
+
+  function visibleRows(task: Task, depth = 0): Array<{ task: Task; depth: number }> {
+    return [
+      { task, depth },
+      ...(expandedTaskIds.has(task.id)
+        ? (childrenByParent.get(task.id) ?? []).flatMap((child) => visibleRows(child, depth + 1))
+        : []),
+    ];
+  }
+
+  function toggleTask(taskId: string) {
+    setExpandedTaskIds((current) => {
+      const next = new Set(current);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
+  }
 
   function stopRow(event: MouseEvent | KeyboardEvent) {
     event.stopPropagation();
@@ -63,7 +96,7 @@ export function IssueListView({
     <div className="issue-list-view" ref={scrollRef}>
       <div className="issue-list-groups">
         {TASK_STATUSES.map((status) => {
-          const statusTasks = tasks.filter((task) => task.status === status);
+          const statusTasks = rootTasks.filter((task) => task.status === status);
           const isCollapsed = collapsed.has(status);
           const statusLabel = taskStatusLabel(language, status);
           return (
@@ -76,12 +109,17 @@ export function IssueListView({
               </button>
               {!isCollapsed && (
                 <div className="issue-list-rows">
-                  {statusTasks.length ? statusTasks.map((task) => {
+                  {statusTasks.length ? statusTasks.flatMap((task) => visibleRows(task)).map(({ task, depth }) => {
                     const assigneeTarget = assigneeTargetForActor(task.assignee, currentUser) ?? "current-user";
                     const displayIdentifier = task.externalKey ?? task.identifier;
+                    const subIssues = task.relations.subIssues;
+                    const done = subIssues.filter((issue) => issue.status === "done").length;
+                    const children = childrenByParent.get(task.id) ?? [];
+                    const isExpanded = expandedTaskIds.has(task.id);
                     return (
                       <div
                         className={`issue-list-row${presentations[task.id]?.unread ? " is-unread" : ""}`}
+                        style={{ "--issue-depth": depth } as CSSProperties}
                         role="button"
                         tabIndex={0}
                         key={task.id}
@@ -91,8 +129,38 @@ export function IssueListView({
                         }}
                       >
                         <span className="issue-list-title-cell">
+                          {children.length > 0 ? (
+                            <button
+                              className="issue-list-expand"
+                              type="button"
+                              aria-expanded={isExpanded}
+                              aria-label={text(
+                                `${isExpanded ? "收起" : "展开"} ${displayIdentifier} 子议题`,
+                                `${isExpanded ? "Collapse" : "Expand"} ${displayIdentifier} sub-issues`,
+                              )}
+                              onClick={(event) => { stopRow(event); toggleTask(task.id); }}
+                              onKeyDown={stopRow}
+                            >
+                              <LinearIcon name={isExpanded ? "chevronDown" : "chevronRight"} />
+                            </button>
+                          ) : <span className="issue-list-expand-spacer" />}
+                          {depth > 0 && (
+                            <span className="issue-list-child-status" title={taskStatusLabel(language, task.status)}>
+                              <StatusIcon status={task.status} size={14} />
+                            </span>
+                          )}
                           <small>{displayIdentifier}</small>
                           <strong>{task.title}</strong>
+                          {subIssues.length > 0 && (
+                            <span
+                              className="sub-issue-summary issue-list-sub-issue-progress"
+                              aria-label={text(`子议题完成进度 ${done}/${subIssues.length}`, `Sub-issue completion ${done}/${subIssues.length}`)}
+                              title={text(`已完成 ${done}/${subIssues.length} 个子议题`, `${done}/${subIssues.length} sub-issues completed`)}
+                            >
+                              <span className="sub-issue-progress" style={{ "--sub-issue-progress": `${Math.round(done / subIssues.length * 100)}%` } as CSSProperties} aria-hidden="true" />
+                              {done}/{subIssues.length}
+                            </span>
+                          )}
                           {presentations[task.id]?.unread && <span className="task-unread-dot" aria-label={text("有未读更新", "Unread updates")} />}
                         </span>
                         <span className="issue-list-metadata" aria-label={text("议题属性", "Issue properties")}>

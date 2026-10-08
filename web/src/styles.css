@@ -9048,7 +9048,7 @@ kbd {
   min-width: 0;
   min-height: 44px;
   gap: 14px;
-  padding: 0 10px 0 30px;
+  padding: 0 10px 0 calc(10px + var(--issue-depth, 0) * 24px);
   border-bottom: var(--border-hairline) solid var(--border);
   border-radius: 6px;
   outline: 0;
@@ -9066,6 +9066,30 @@ kbd {
   min-width: 0;
   gap: 8px;
 }
+
+.issue-list-expand,
+.issue-list-expand-spacer {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 20px;
+}
+
+.issue-list-expand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.issue-list-expand:hover { background: var(--surface-active); }
+.issue-list-expand svg { width: 12px; height: 12px; }
+.issue-list-child-status { display: inline-flex; flex: 0 0 auto; }
+.issue-list-sub-issue-progress { flex: 0 0 auto; }
 
 .issue-list-title-cell small {
   flex: 0 0 auto;
