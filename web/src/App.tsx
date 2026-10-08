@@ -3518,7 +3518,7 @@ export function App() {
                             role="menuitemradio"
                             aria-checked={project.id === selectedProjectId}
                             disabled={openingProjectId !== null}
-                            onContextMenu={project.id.startsWith("temp-") ? (event) => {
+                            onContextMenu={project.id !== GLOBAL_PROJECT_ID ? (event) => {
                               event.preventDefault();
                               setProjectContextMenu({
                                 project,
