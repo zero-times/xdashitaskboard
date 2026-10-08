@@ -2369,8 +2369,12 @@ export function App() {
   }, [trackedCodexThreadIdsKey]);
 
   const tasksByStatus = useMemo(() => {
+    const visibleTaskIds = new Set(filteredTasks.map((task) => task.id));
+    const rootTasks = filteredTasks.filter((task) => (
+      !task.relations.parent || !visibleTaskIds.has(task.relations.parent.id)
+    ));
     return Object.fromEntries(
-      TASK_STATUSES.map((status) => [status, filteredTasks.filter((task) => task.status === status)]),
+      TASK_STATUSES.map((status) => [status, rootTasks.filter((task) => task.status === status)]),
     ) as Record<TaskStatus, Task[]>;
   }, [filteredTasks]);
 
@@ -3930,6 +3934,7 @@ export function App() {
                         }}
                         status={item}
                         tasks={tasksByStatus[item]}
+                        allTasks={filteredTasks}
                         presentations={taskPresentations}
                         emptyMessage={hasActiveTaskFilters
                           ? text("当前筛选下无匹配议题", "No issues match the current filters")
@@ -3968,6 +3973,7 @@ export function App() {
                     activeTab={otherTasksTab}
                     tabs={otherTaskTabs}
                     tasksByStatus={tasksByStatus}
+                    allTasks={filteredTasks}
                     archivedTasks={filteredArchivedTasks}
                     presentations={taskPresentations}
                     hasActiveFilters={hasActiveTaskFilters}

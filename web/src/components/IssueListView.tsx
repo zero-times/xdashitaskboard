@@ -47,7 +47,8 @@ export function IssueListView({
   const [expandedTaskIds, setExpandedTaskIds] = useState(() => new Set<string>());
   const [priorityMenuTaskId, setPriorityMenuTaskId] = useState<string | null>(null);
 
-  const taskIds = new Set(tasks.map((task) => task.id));
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
+  const taskIds = new Set(taskById.keys());
   const childrenByParent = new Map<string, Task[]>();
   const rootTasks: Task[] = [];
   for (const task of tasks) {
@@ -113,7 +114,7 @@ export function IssueListView({
                     const assigneeTarget = assigneeTargetForActor(task.assignee, currentUser) ?? "current-user";
                     const displayIdentifier = task.externalKey ?? task.identifier;
                     const subIssues = task.relations.subIssues;
-                    const done = subIssues.filter((issue) => issue.status === "done").length;
+                    const done = subIssues.filter((issue) => (taskById.get(issue.id) ?? issue).status === "done").length;
                     const children = childrenByParent.get(task.id) ?? [];
                     const isExpanded = expandedTaskIds.has(task.id);
                     return (

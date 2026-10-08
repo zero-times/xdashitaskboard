@@ -134,6 +134,7 @@ interface OtherTasksPanelProps {
   activeTab: OtherTaskTab;
   tabs: readonly OtherTaskTab[];
   tasksByStatus: Record<TaskStatus, Task[]>;
+  allTasks: Task[];
   archivedTasks: Task[];
   presentations: Record<string, TaskCardPresentation>;
   hasActiveFilters: boolean;
@@ -171,6 +172,7 @@ export function OtherTasksPanel({
   activeTab,
   tabs,
   tasksByStatus,
+  allTasks,
   archivedTasks,
   presentations,
   hasActiveFilters,
@@ -304,6 +306,7 @@ export function OtherTasksPanel({
             <TaskCard
               key={task.id}
               task={task}
+              allTasks={allTasks}
               variant="sidebar"
               presentation={presentations[task.id]}
               isDragging={draggedTaskId === task.id}

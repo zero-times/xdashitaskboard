@@ -9802,3 +9802,38 @@ kbd {
   background: var(--surface); color: var(--text-primary); font: inherit;
 }
 .cloud-device-dialog > p { margin-top: 10px; line-height: 1.5; }
+
+/* Collapsible sub-issues within board cards. */
+.task-card > .card-sub-issues {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: var(--border-hairline) solid var(--border);
+  pointer-events: auto;
+}
+
+.card-sub-issues-toggle,
+.card-sub-issue-open {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  gap: 6px;
+  padding: 4px 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.card-sub-issues-toggle { color: var(--text-tertiary); font-size: 11px; }
+.card-sub-issues-toggle > svg { width: 12px; height: 12px; }
+.card-sub-issues-toggle > .sub-issue-summary { margin-left: auto; }
+.card-sub-issues-toggle:disabled { cursor: default; }
+.card-sub-issue-list { margin: 4px 0 0 6px; padding-left: 10px; border-left: 1px solid var(--border); }
+.card-sub-issue-open { color: var(--text-primary); font-size: 11px; }
+.card-sub-issue-open small { flex: 0 0 auto; color: var(--text-tertiary); font-size: 10px; }
+.card-sub-issue-open > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-sub-issue-open:hover,
+.card-sub-issues-toggle:hover:not(:disabled) { background: var(--surface-active); }
+.card-sub-issue > .card-sub-issues { margin-left: 19px; }

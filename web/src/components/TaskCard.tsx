@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
@@ -12,7 +12,7 @@ import {
   type TaskPriority,
 } from "../types";
 import { labelPresentation } from "../labels";
-import { taskPriorityLabel, useTaskboardI18n } from "../i18n";
+import { taskPriorityLabel, taskStatusLabel, useTaskboardI18n } from "../i18n";
 import { CODEX_AGENT_ACTOR, actorKey, assigneeTargetForActor } from "../actors";
 import type {
   TaskCardPresentation,
@@ -20,7 +20,7 @@ import type {
 } from "../taskConversations";
 import { ActorAvatar } from "./ActorAvatar";
 import { LinearIcon } from "./LinearIcon";
-import { DueDateIcon, PriorityIcon, ProjectIcon } from "./SemanticIcons";
+import { DueDateIcon, PriorityIcon, ProjectIcon, StatusIcon } from "./SemanticIcons";
 import { LabelPicker } from "./LabelPicker";
 import { TaskPropertyPicker } from "./TaskPropertyPicker";
 import { TaskConversationMenu } from "./TaskConversationMenu";
@@ -29,6 +29,7 @@ import processingAnimation from "../assets/figma-taskboard/loading-16.svg";
 
 interface TaskCardProps {
   task: Task;
+  allTasks?: Task[];
   variant?: "main" | "sidebar";
   presentation: TaskCardPresentation;
   isDragging: boolean;
@@ -400,8 +401,68 @@ function AssigneeControl({
   );
 }
 
+function CardSubIssues({
+  task,
+  tasks,
+  onOpenTask,
+}: {
+  task: Task;
+  tasks: Task[];
+  onOpenTask: (task: Task) => void;
+}) {
+  const { language, text } = useTaskboardI18n();
+  const [expanded, setExpanded] = useState(false);
+  const taskById = new Map(tasks.map((candidate) => [candidate.id, candidate]));
+  const subIssues = task.relations.subIssues.map((issue) => taskById.get(issue.id) ?? issue);
+  const children = tasks.filter((candidate) => candidate.relations.parent?.id === task.id);
+  const done = subIssues.filter((issue) => issue.status === "done").length;
+  const identifier = task.externalKey ?? task.identifier;
+  if (subIssues.length === 0) return null;
+
+  return (
+    <div className="card-sub-issues">
+      <button
+        className="card-sub-issues-toggle"
+        type="button"
+        aria-expanded={expanded}
+        aria-label={text(`${expanded ? "收起" : "展开"} ${identifier} 子议题`, `${expanded ? "Collapse" : "Expand"} ${identifier} sub-issues`)}
+        disabled={children.length === 0}
+        onClick={() => setExpanded((current) => !current)}
+      >
+        <LinearIcon name={expanded ? "chevronDown" : "chevronRight"} />
+        <span>{text("子议题", "Sub-issues")}</span>
+        <span className="sub-issue-summary" title={text(`已完成 ${done}/${subIssues.length} 个子议题`, `${done}/${subIssues.length} sub-issues completed`)}>
+          <span className="sub-issue-progress" style={{ "--sub-issue-progress": `${Math.round(done / subIssues.length * 100)}%` } as CSSProperties} aria-hidden="true" />
+          {done}/{subIssues.length}
+        </span>
+      </button>
+      {expanded && (
+        <div className="card-sub-issue-list">
+          {children.map((child) => (
+            <div className="card-sub-issue" key={child.id}>
+              <button
+                className="card-sub-issue-open"
+                type="button"
+                title={`${taskStatusLabel(language, child.status)} · ${child.title}`}
+                aria-label={text(`打开 ${child.externalKey ?? child.identifier}: ${child.title}`, `Open ${child.externalKey ?? child.identifier}: ${child.title}`)}
+                onClick={() => onOpenTask(child)}
+              >
+                <StatusIcon status={child.status} size={13} />
+                <small>{child.externalKey ?? child.identifier}</small>
+                <span>{child.title}</span>
+              </button>
+              <CardSubIssues task={child} tasks={tasks} onOpenTask={onOpenTask} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function TaskCard({
   task,
+  allTasks,
   variant = "main",
   presentation,
   isDragging,
@@ -611,6 +672,7 @@ export function TaskCard({
           />
         </>
       )}
+      {allTasks && <CardSubIssues task={task} tasks={allTasks} onOpenTask={onEdit} />}
       {showCreatedAt && (
         <time className="task-card-created-at" dateTime={task.createdAt}>
           {createdDate(task.createdAt, locale, text)}

@@ -23,6 +23,7 @@ interface BoardColumnProps {
   scrollRef: (element: HTMLDivElement | null) => void;
   status: TaskStatus;
   tasks: Task[];
+  allTasks: Task[];
   presentations: Record<string, TaskCardPresentation>;
   emptyMessage: string;
   isDropTarget: boolean;
@@ -55,6 +56,7 @@ export function BoardColumn({
   scrollRef,
   status,
   tasks,
+  allTasks,
   presentations,
   emptyMessage,
   isDropTarget,
@@ -140,6 +142,7 @@ export function BoardColumn({
             <TaskCard
               key={task.id}
               task={task}
+              allTasks={allTasks}
               presentation={presentations[task.id]}
               isDragging={draggedTaskId === task.id}
               dragShift={dragShift}
